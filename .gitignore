@@ -1,0 +1,4 @@
+build
+__pycache__
+rpiupload.py
+serial_tools.py
