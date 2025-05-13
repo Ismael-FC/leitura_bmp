@@ -1,58 +1,54 @@
 .program leitura_bmp
-.side_set 1 opt
+.side_set 1 opt pindirs
 
 length:
-    out y 8                         ; How many bytes to send, excluding address
+    out y 8                             ; How many bytes to send, excluding address
 
 start:                          
-    set pins 1          side 1            
-    set pins 0                            
-    nop                 side 0      
+    set pindirs 1       side 1      
+    set pindirs 0                          
+    nop                 side 0    
 
 write:
-    set x 7                         ; Loop through byte
+    set x 7                             ; Loop through byte
 
 bitloopW:
-    out pins 1              
-    nop                 side 1  [1]
+    out pindirs 1               [1]        
+    nop                 side 1   
+    wait 1 pin, 1               [1]
     jmp x-- bitloopW    side 0  
 
-ackS:                               ; ACK by Slave
-    set pindirs, 0         
-    nop                 side 1 
-    in pins, 8                      ; Get ACK bit and trigger autopush
-    set pindirs, 1      side 0
-    jmp y-- write                   ; Stop when no bytes left to send
+ackS:                                   ; ACK by Slave
+    set pindirs, 1              [1]    
+    nop                 side 1
+    wait 1 pin 1 
+    in pins, 8                          ; Get ACK bit and trigger autopush
+    jmp y-- write       side 0          ; Stop when no bytes left to send
 
 decide:   
-    out y 8                         ; Wait for signal to read or write
+    out y 8                             ; Wait for signal to read or write
     jmp !y stop             
 
 read:
-    set x 7             side 0
-    set pindirs 0              
+    set x 7             
+    set pindirs 1              
 
 bitloopR:
     nop                 side 1
+    wait 1 pin 1
     in pins 1                   
-    jmp x-- bitloopR    side 0  [1] ; Autopush is triggered every 8 bit received
+    jmp x-- bitloopR    side 0  [2]     ; Autopush is triggered every 8 bit received
 
-ackM:
-    set pindirs 1                    
-    out y 8                         ; Wait signal to continue or stop reading
-    jmp !y NackM        
-    set pins 0                      ; ACK by Master
-    jmp read            side 1
-
-NackM:
-    set pins 1                      ; NO ACK by Master
-    nop                 side 1  [1]
-    nop                 side 0 
+ackM:                  
+    out pindirs 1
+    out y 7             side 1  
+    wait 1 pin 1                [1]
+    jmp !y read         side 0 
 
 stop:
-    set pins 0          side 0        
+    set pindirs 0       side 0        
     nop                 side 1  
-    set pins 1 
+    set pindirs 1 
 
 
 

@@ -10,8 +10,6 @@ void sm_init(struct State_Machine sm, uint sda, uint scl){
 
     pio_sm_config c = leitura_bmp_program_get_default_config(sm.offset);
 
-    pio_gpio_init(sm.pio, sda);
-    pio_gpio_init(sm.pio, scl);
     pio_sm_set_consecutive_pindirs(sm.pio, sm.index, sda, 2, true);
 
     sm_config_set_in_pins(&c, sda);
@@ -21,15 +19,28 @@ void sm_init(struct State_Machine sm, uint sda, uint scl){
 
     sm_config_set_in_shift(&c, false, true, 8);
     sm_config_set_out_shift(&c, false, true, 8);
-    sm_config_set_clkdiv(&c, 78.125f);
+    sm_config_set_clkdiv(&c, 45.0f);
+    
+
+    gpio_pull_up(scl);
+    gpio_pull_up(sda);
+    uint32_t both_pins = (1u << sda) | (1u << scl);
+    pio_sm_set_pins_with_mask(sm.pio, sm.index, both_pins, both_pins);
+    pio_sm_set_pindirs_with_mask(sm.pio, sm.index, both_pins, both_pins);
+
+    pio_gpio_init(sm.pio, sda);
+    gpio_set_oeover(sda, GPIO_OVERRIDE_INVERT);
+    pio_gpio_init(sm.pio, scl);
+    gpio_set_oeover(scl, GPIO_OVERRIDE_INVERT);
+    
+    pio_sm_set_pins_with_mask(sm.pio, sm.index, 0, both_pins);
 
     pio_sm_init(sm.pio, sm.index, sm.offset, &c);
     pio_sm_set_enabled(sm.pio, sm.index, true);
 
     pio_sm_clear_fifos(sm.pio, sm.index);
 
-    gpio_pull_up(sda);
-    gpio_pull_up(scl);
+    
 
 }
 
@@ -81,7 +92,13 @@ uint32_t read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg){
     pio_sm_put_blocking(sm.pio, sm.index, 0xffffffff);              //Signals the PIO to jump to reading sequence
     message = pio_sm_get_blocking(sm.pio, sm.index);
 
-    pio_sm_put_blocking(sm.pio, sm.index, 0x00);                    //Stop condition
+    pio_sm_put_blocking(sm.pio, sm.index, 0x00);              //Signals the PIO to jump to reading sequence
+    message = pio_sm_get_blocking(sm.pio, sm.index);
+
+    pio_sm_put_blocking(sm.pio, sm.index, 0x00);              //Signals the PIO to jump to reading sequence
+    message = pio_sm_get_blocking(sm.pio, sm.index);
+
+    pio_sm_put_blocking(sm.pio, sm.index, 0xffffffff);                    //Stop condition
     
     return message;
 }
