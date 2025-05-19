@@ -6,7 +6,7 @@ length:
 
 start:                          
     set pindirs 1       side 1  [7]   
-    set pindirs 0                         
+    set pindirs 0               [7]         
     nop                 side 0    
 
 write:
@@ -47,7 +47,7 @@ ackM:
 
 stop:
     set pindirs 0       side 0  [3]      
-    nop                 side 1  
+    nop                 side 1  [7]
     set pindirs 1               [7]
 
 
