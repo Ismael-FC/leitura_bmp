@@ -14,7 +14,7 @@ struct State_Machine{
 void sm_init(struct State_Machine sm, uint sda, uint scl);
 void write_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t data[], uint data_len);
 void write_i2c_burst(struct State_Machine sm, uint8_t addr, uint8_t data[], uint8_t data_len);
-uint32_t read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg);
+uint32_t read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg, uint8_t data_len);
 
 /* Phalanges addresses */
 #define PCA_ADDRESS_TOP     0x72 
