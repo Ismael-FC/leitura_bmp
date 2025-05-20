@@ -19,9 +19,8 @@ void sm_init(struct State_Machine sm, uint sda, uint scl){
 
     sm_config_set_in_shift(&c, false, true, 8);
     sm_config_set_out_shift(&c, false, true, 8);
-    sm_config_set_clkdiv(&c, 18.38235f);
+    sm_config_set_clkdiv(&c, 19.53125f);
     
-
     gpio_pull_up(scl);
     gpio_pull_up(sda);
     uint32_t both_pins = (1u << sda) | (1u << scl);
@@ -39,8 +38,6 @@ void sm_init(struct State_Machine sm, uint sda, uint scl){
     pio_sm_set_enabled(sm.pio, sm.index, true);
 
     pio_sm_clear_fifos(sm.pio, sm.index);
-
-    
 
 }
 
@@ -65,7 +62,8 @@ void write_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t data[], uint d
 void write_i2c_burst(struct State_Machine sm, uint8_t addr, uint8_t data[], uint8_t data_len){
 
     uint32_t acks[32] = {0};
-    pio_sm_put_blocking(sm.pio, sm.index, data_len << 24);      //The message is pulled from the left in the TX FIFO
+    
+    pio_sm_put(sm.pio, sm.index, data_len << 24);               //The message is pulled from the left in the TX FIFO
     pio_sm_put_blocking(sm.pio, sm.index, addr << 25);          //Add write "0" bit
     pio_sm_get_blocking(sm.pio, sm.index);                      //Slave's acknowledge
 
@@ -74,7 +72,7 @@ void write_i2c_burst(struct State_Machine sm, uint8_t addr, uint8_t data[], uint
         acks[i] = pio_sm_get_blocking(sm.pio, sm.index);
     }
     
-    sm.pio->txf[sm.index] = 0x00;                               //Signals the PIO to jump to stop
+    pio_sm_put(sm.pio, sm.index, 0x00);                              //Signals the PIO to jump to stop
 
 }
 
@@ -85,10 +83,10 @@ uint32_t read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg, uint8_
 
     write_reg_i2c(sm, addr, &reg, 1);                           
 
-    pio_sm_put_blocking(sm.pio, sm.index, 0x00);                        //Message with length 0
+    pio_sm_put(sm.pio, sm.index, 0x00);                                 //Message with length 0
     pio_sm_put_blocking(sm.pio, sm.index, ((addr << 1) + 1) << 24);     //Add read "1" bit
     pio_sm_get_blocking(sm.pio, sm.index);
-    pio_sm_put(sm.pio, sm.index, 0xffffffff);
+    pio_sm_put(sm.pio, sm.index, FILL_TXF);
 
     for (size_t i = 0; i < data_len-1; i++){                            //Signals the PIO to jump to reading sequence
         message = pio_sm_get_blocking(sm.pio, sm.index);
@@ -96,7 +94,7 @@ uint32_t read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg, uint8_
     }
 
     message = pio_sm_get_blocking(sm.pio, sm.index);
-    pio_sm_put(sm.pio, sm.index, 0xffffffff);                  //Stop condition
+    pio_sm_put(sm.pio, sm.index, FILL_TXF);                  //Stop condition
     
     return message;
 }

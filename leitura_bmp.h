@@ -68,4 +68,6 @@ uint32_t read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg, uint8_
 /* Command's register */
 #define BMP_CMD             0x7e
 
+#define FILL_TXF            0xffffffff
+
 #endif

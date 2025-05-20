@@ -13,16 +13,16 @@ write:
     set x 7                             ; Loop through byte
 
 bitloopW:
-    out pindirs 1               [5]          
-    nop                 side 1  [1]
-    wait 1 pin, 1               [5]
+    out pindirs 1               [7]          
+    nop                 side 1  [5]
+;    wait 1 pin, 1               [5]
     jmp x-- bitloopW    side 0  [1]
 
 ackS:                                   ; ACK by Slave
-    set pindirs, 1              [5]             
+    set pindirs, 1              [7]             
     nop                 side 1  
-    wait 1 pin 1                [3]
-    in pins, 8                  [2]     ; Get ACK bit and trigger autopush
+;    wait 1 pin 1                [3]
+    in pins, 8                  [4]     ; Get ACK bit and trigger autopush
     jmp y-- write       side 0          ; Stop when no bytes left to send
 
 decide:   
@@ -30,23 +30,23 @@ decide:
     jmp !y stop             
 
 read:
-    set x 7                     [1]                         
+    set x 7                                              
 
 bitloopR:
-    set pindirs 1               [1]
-    nop                 side 1  [1]
-    wait 1 pin 1                [3]
-    in pins 1                   [1]
-    jmp x-- bitloopR    side 0  [5]     ; Autopush is triggered every 8 bit received
+    set pindirs 1               [5]
+    nop                 side 1  [2]
+;    wait 1 pin 1                [3]
+    in pins 1                   [2]
+    jmp x-- bitloopR    side 0  [3]     ; Autopush is triggered every 8 bit received
 
 ackM:                  
-    out pindirs 1               [1]
-    out y 7             side 1  [2]
-    wait 1 pin 1                [5]
-    jmp !y read         side 0  [3]
+    out pindirs 1               [5]
+    out y 7             side 1  [5]
+;    wait 1 pin 1                [5]
+    jmp !y read         side 0  [2]
 
 stop:
-    set pindirs 0       side 0  [3]      
+    set pindirs 0       side 0  [6]      
     nop                 side 1  [7]
     set pindirs 1               [7]
 
