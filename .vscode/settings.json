@@ -41,7 +41,11 @@
         "*.pio": "pio",
         "stdlib.h": "c",
         "pio.h": "c",
-        "leitura_bmp.h": "c"
+        "leitura_bmp.h": "c",
+        "leitura_bmp.pio.h": "c",
+        "cstdint": "c",
+        "compare": "c",
+        "variant": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

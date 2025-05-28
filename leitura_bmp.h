@@ -9,17 +9,75 @@ struct State_Machine{
     uint index;
     PIO pio;
     uint offset;
+
+    pio_sm_config config;
 };
 
+struct bmp_sensor{
+   uint8_t switch_addr;
+   uint8_t address;
+   uint8_t channel;
+
+   bool active;
+   uint address_fail;
+   uint message_fail;
+   
+   uint32_t press_raw;
+   uint32_t temp_raw;
+
+   /*Calibration data*/
+   double par_t1;
+   double par_t2;
+   double par_t3;
+   
+   double par_p1;
+   double par_p2;
+   double par_p3;
+   double par_p4;
+   double par_p5;
+   double par_p6;
+   double par_p7;
+   double par_p8;
+   double par_p9;
+   double par_p10;
+   double par_p11;
+   /*End of calibration data*/
+
+   double comp_temp;
+   double comp_press[3];
+};
+
+#define SDA 26
+#define SCL 27
+
 void sm_init(struct State_Machine sm, uint sda, uint scl);
-void write_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t data[], uint data_len);
-void write_i2c_burst(struct State_Machine sm, uint8_t addr, uint8_t data[], uint8_t data_len);
-uint32_t read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg, uint8_t data_len);
+void bmp_init(struct bmp_sensor *bmp, struct State_Machine sm);
+
+uint write_i2c_burst(struct State_Machine sm, uint8_t addr, uint8_t data[], uint8_t data_len);
+int read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len);
+
+int bmp_status_refresh(struct State_Machine sm, struct bmp_sensor *bmp, uint error_mask);
+int bmp_status_check(struct bmp_sensor *bmp);
+int bmp_write(struct State_Machine sm, struct bmp_sensor *bmp, uint8_t data[], uint8_t data_len);
+int bmp_read(struct State_Machine sm, struct bmp_sensor *bmp, uint8_t reg, uint8_t data[], uint8_t data_len);
+
+double bmp_compensate_temperature(uint32_t uncomp_temp, struct bmp_sensor *bmp);
+double bmp_compensate_pressure(uint32_t uncomp_press, struct bmp_sensor *bmp);
+void bmp_get_pressure(struct State_Machine sm, struct bmp_sensor *bmp);
+
+void bmp_calib_file_helper(struct State_Machine sm, struct bmp_sensor *bmp);
+void bmp_press_file_helper(struct State_Machine sm, struct bmp_sensor *bmp);
 
 /* Phalanges addresses */
 #define PCA_ADDRESS_TOP     0x72 
 #define PCA_ADDRESS_MID     0x71
 #define PCA_ADDRESS_BOTTOM  0x70
+
+/* PCA Channels */
+#define CHANNEL_1 0x01
+#define CHANNEL_2 0x02
+#define CHANNEL_3 0x04
+#define CHANNEL_4 0x08
 
 /* Command to close all channels */
 #define PCA_CLOSE           0x00
@@ -65,9 +123,23 @@ uint32_t read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg, uint8_
 #define BMP_ODR             0x1d
 #define BMP_FILTER_CONFIG   0x1F
 
+/* First and last calibration registers */
+#define BMP_CALIB_REG_FIRST 0x31
+#define BMP_CALIB_REG_LAST  0x45
+
 /* Command's register */
 #define BMP_CMD             0x7e
 
 #define FILL_TXF            0xffffffff
+
+/* Status */
+#define NOT_OK              1
+#define OK                  0
+
+/* Errors */
+#define BMP_INACTIVE        -1
+#define CHANNEL_CLOSED      -2
+#define ADDR_NOT_FOUND      1
+#define LINE_DOWN           -4
 
 #endif
