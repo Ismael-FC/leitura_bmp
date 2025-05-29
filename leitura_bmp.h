@@ -13,8 +13,17 @@ struct State_Machine{
     pio_sm_config config;
 };
 
+struct pca{
+   uint8_t address;
+   uint8_t channel;
+   bool open;
+};
+
+
 struct bmp_sensor{
    uint8_t switch_addr;
+   struct pca *pca_ptr;
+
    uint8_t address;
    uint8_t channel;
 
@@ -50,23 +59,57 @@ struct bmp_sensor{
 #define SDA 26
 #define SCL 27
 
-void sm_init(struct State_Machine sm, uint sda, uint scl);
-void bmp_init(struct bmp_sensor *bmp, struct State_Machine sm);
+/* Initiates a single state machine and stores its configuration */
+void sm_init(struct State_Machine *sm, uint sda, uint scl);
 
-uint write_i2c_burst(struct State_Machine sm, uint8_t addr, uint8_t data[], uint8_t data_len);
-int read_reg_i2c(struct State_Machine sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len);
+/* Reboots a state machine if it was stuck */
+void sm_soft_reboot(struct State_Machine *sm);
 
-int bmp_status_refresh(struct State_Machine sm, struct bmp_sensor *bmp, uint error_mask);
+/* Opens a channel if it wasn't openned */
+int channel_open(struct State_Machine *sm, struct bmp_sensor *bmp);
+
+/* Initializes a single BMP sensor. Failure to initialize will result
+   in an inactive sensor. Inactive sensors cannot perform read/write operations */
+void bmp_init(struct State_Machine *sm, struct bmp_sensor *bmp);
+
+/* Reads, converts and stores the unique calibration values of a BMP*/
+void bmp_get_calib(struct State_Machine *sm, struct bmp_sensor *bmp);
+
+/* Refreshes the fail status of a BMP sensor based on an error mask.
+   It does not take into account line failures */
+int bmp_status_refresh(struct State_Machine *sm, struct bmp_sensor *bmp, uint error_mask);
+
+/* Deactivates BMP sensors whose failure status exceeds a certain threshold */
 int bmp_status_check(struct bmp_sensor *bmp);
-int bmp_write(struct State_Machine sm, struct bmp_sensor *bmp, uint8_t data[], uint8_t data_len);
-int bmp_read(struct State_Machine sm, struct bmp_sensor *bmp, uint8_t reg, uint8_t data[], uint8_t data_len);
 
-double bmp_compensate_temperature(uint32_t uncomp_temp, struct bmp_sensor *bmp);
-double bmp_compensate_pressure(uint32_t uncomp_press, struct bmp_sensor *bmp);
-void bmp_get_pressure(struct State_Machine sm, struct bmp_sensor *bmp);
+/* Sends data via I2C to a sensor and automatically refreshes its status
+   in case of failure */
+int bmp_write(struct State_Machine *sm, struct bmp_sensor *bmp, uint8_t data[], uint8_t data_len);
 
-void bmp_calib_file_helper(struct State_Machine sm, struct bmp_sensor *bmp);
-void bmp_press_file_helper(struct State_Machine sm, struct bmp_sensor *bmp);
+/* Receives data via I2C from a BMP and automatically refreshes its status
+   in case of failure. Can also reboot the SM if there's a line failure */
+int bmp_read(struct State_Machine *sm, struct bmp_sensor *bmp, uint8_t reg, uint8_t data[], uint8_t data_len);
+
+/* Turns raw temperature values into readable values in ºC */
+double bmp_compensate_temperature(struct bmp_sensor *bmp);
+
+/* Turns raw pressure values into readable values in Pa */
+double bmp_compensate_pressure(struct bmp_sensor *bmp);
+
+/* Reads raw pressure and temperature (for compensation) values from a BMP sensor */
+void bmp_get_pressure(struct State_Machine *sm, struct bmp_sensor *bmp);
+
+/* Writes calibration values into a CSV file via UART */
+void bmp_calib_file_helper(struct bmp_sensor *bmp);
+
+/* Writes pressure and temperature values into a CSV file via UART */
+void bmp_press_file_helper(struct bmp_sensor *bmp);
+
+/* Sends data via I2C. Assumes data_len is, at least, equal to data */
+int write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t data_len);
+
+/* Reads data_len from reg via I2C and writes it into rxbuff.*/
+int read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len);
 
 /* Phalanges addresses */
 #define PCA_ADDRESS_TOP     0x72 
