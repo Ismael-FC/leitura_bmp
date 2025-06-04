@@ -21,18 +21,21 @@ void sm_init(struct State_Machine *sm, uint sda, uint scl){
     sm_config_set_in_shift(&(sm->config), false, true, 8);
     sm_config_set_out_shift(&(sm->config), false, true, 8);
     sm_config_set_clkdiv(&(sm->config), 7.8125f);               //7.8125 = 1 MHz, 19.53125 = 400 kHz
+
+    // gpio_init(VCC);
+    // gpio_set_dir(VCC, true);
     
     gpio_pull_up(scl);
     gpio_pull_up(sda);
     uint32_t both_pins = (1u << sda) | (1u << scl);
-    pio_sm_set_pins_with_mask(sm->pio, sm->index, both_pins, both_pins);
     pio_sm_set_pindirs_with_mask(sm->pio, sm->index, both_pins, both_pins);
+    pio_sm_set_pins_with_mask(sm->pio, sm->index, both_pins, both_pins);
 
-    pio_gpio_init(sm->pio, sda);
-    gpio_set_oeover(sda, GPIO_OVERRIDE_INVERT);
     pio_gpio_init(sm->pio, scl);
     gpio_set_oeover(scl, GPIO_OVERRIDE_INVERT);
-    
+    pio_gpio_init(sm->pio, sda);
+    gpio_set_oeover(sda, GPIO_OVERRIDE_INVERT);
+
     pio_sm_set_pins_with_mask(sm->pio, sm->index, 0, both_pins);
 
     pio_sm_init(sm->pio, sm->index, sm->offset, &(sm->config));
@@ -44,6 +47,9 @@ void sm_init(struct State_Machine *sm, uint sda, uint scl){
 
 void sm_soft_reboot(struct State_Machine *sm){
     pio_sm_set_enabled(sm->pio, sm->index, false);
+    // gpio_put(VCC, false);
+    // sleep_ms(250);
+    // gpio_put(VCC, true);
     sm_init(sm, SDA, SCL);
 }
 
@@ -188,7 +194,7 @@ void bmp_get_pressure(struct State_Machine *sm, struct bmp_sensor *bmp){
     bmp->comp_press[1] = bmp->comp_press[0]; 
 
     //Temperature is used in compensation
-    uint8_t buffer[6];
+    uint8_t buffer[6] = {0};
     
     bmp_read(sm, bmp, BMP_PRESS_REG_LSB, buffer, 6);
 
@@ -265,14 +271,23 @@ void bmp_calib_file_helper(struct bmp_sensor *bmp){
 }
 
 void bmp_press_file_helper(struct bmp_sensor *bmp){
+
+    char buffer[16];
+
     if (!(bmp->active)){
-        return;
+            return;
     }
+
     
-    gpio_pull_up(7);
-    // printf("Addr - 0x%02x, Channel - %u\n", bmp->address, bmp->channel);
-    printf("%.2lf, %.2f\n", bmp->comp_press[0], bmp->comp_temp);
-    gpio_pull_down(7);
+    snprintf(buffer, sizeof(buffer), "%.0f,", bmp->comp_press[0]);
+
+    
+    // printf(buffer);
+    
+    uart_puts(UART_ID, buffer);
+    
+
+    
 }
 
 int write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t data_len){

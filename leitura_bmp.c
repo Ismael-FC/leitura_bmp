@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
+#include "hardware/uart.h"
 
 #include "leitura_bmp.h"
 #include "leitura_bmp_func.c"
@@ -10,12 +11,26 @@
 int main(){
     stdio_init_all();
 
+    uart_init(UART_ID, 115200);
+    gpio_set_function(UART_TX, UART_FUNCSEL_NUM(UART_ID, UART_TX));
+    gpio_set_function(UART_RX, UART_FUNCSEL_NUM(UART_ID, UART_RX));
+
+    uart_set_baudrate(UART_ID, BAUD_RATE);
+    uart_set_hw_flow(UART_ID, false, false);
+    uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
+    uart_set_fifo_enabled(UART_ID, false);
+
+    gpio_init(UART_ENABLE);
+    gpio_set_dir(UART_ENABLE, true);
+    gpio_pull_up(UART_ENABLE);
+
     struct State_Machine sm0 = {
         0, 
         pio0, 
         pio_add_program(pio0, &leitura_bmp_program)
     };
 
+    
     struct pca pca_top[4] = {
         {PCA_ADDRESS_TOP, CHANNEL_1, false},
         {PCA_ADDRESS_TOP, CHANNEL_2, false},
@@ -35,7 +50,6 @@ int main(){
     };
 
     sm_init(&sm0, SDA, SCL);
-
     
     for (size_t i = 0; i < 8; i++){
         bmp_init(&sm0, &bmp_top[i]);
@@ -50,11 +64,13 @@ int main(){
     for (size_t i = 0; i < 8; i++){
         bmp_top[i].pca_ptr->open = false;
     }
-    // sleep_ms(5);
+    sleep_ms(5);
 
     absolute_time_t now = get_absolute_time();
 
-    while ((to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(now)) < 10000){
+
+    gpio_put(UART_ENABLE, true);
+    while ((to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(now)) < 60000){
         for (size_t i = 0; i < 8; i++){
             bmp_get_pressure(&sm0, &bmp_top[i]);
         }
@@ -64,12 +80,23 @@ int main(){
         for (size_t i = 0; i < 8; i++){
             bmp_top[i].pca_ptr->open = false;
         }
-        sleep_ms(3);
-        // for (size_t i = 0; i < 8; i++){
-        //     bmp_press_file_helper(&bmp_top[i]);
-        // }
-    }
 
+       
+        for (size_t i = 0; i < 8; i++){
+            bmp_press_file_helper(&bmp_top[i]);
+        }
+        uart_puts(UART_ID, "\n");
+
+        
+
+        // gpio_put(UART_ENABLE, true);
+        // uart_puts(UART_ID, "\n");
+        // gpio_put(UART_ENABLE, false);
+
+
+    }
+    gpio_put(UART_ENABLE, false);
+    
     uint8_t pca_end[1] = {PCA_CLOSE};
     write_i2c(&sm0, PCA_ADDRESS_TOP, pca_end, sizeof(pca_end));
     

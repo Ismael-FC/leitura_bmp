@@ -58,6 +58,7 @@ struct bmp_sensor{
 
 #define SDA 26
 #define SCL 27
+#define VCC 28
 
 /* Initiates a single state machine and stores its configuration */
 void sm_init(struct State_Machine *sm, uint sda, uint scl);
@@ -110,6 +111,17 @@ int write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t da
 
 /* Reads data_len from reg via I2C and writes it into rxbuff.*/
 int read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len);
+
+/* UART Utility */
+#define UART_ID uart1
+#define UART_TX 4
+#define UART_RX 5
+#define UART_ENABLE 7
+#define DATA_BITS 8
+#define STOP_BITS 1
+#define PARITY    UART_PARITY_NONE
+#define BAUD_RATE 115200
+
 
 /* Phalanges addresses */
 #define PCA_ADDRESS_TOP     0x72 

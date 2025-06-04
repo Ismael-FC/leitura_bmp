@@ -37,7 +37,7 @@ bitloopR:
     jmp x-- bitloopR    side 0  [3]     ; Autopush is triggered every 8 bit received
 
 ackM:                  
-    out pindirs 1               [3]
+    out pindirs 1               [3]     ; Wait signal to stop
     out y 7             side 1  [7]
     jmp !y read         side 0  [2]
 
@@ -45,7 +45,6 @@ stop:
     set pindirs 0       side 0  [4]      
     nop                 side 1  [7]
     set pindirs 1               [7]
-
-
+.wrap
 
 

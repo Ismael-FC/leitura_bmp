@@ -44,30 +44,29 @@ pico_set_program_version(leitura_bmp "0.1")
 pico_generate_pio_header(leitura_bmp ${CMAKE_CURRENT_LIST_DIR}/leitura_bmp.pio)
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(leitura_bmp 1)
-pico_enable_stdio_usb(leitura_bmp 0)
+pico_enable_stdio_uart(leitura_bmp 0)
+pico_enable_stdio_usb(leitura_bmp 1)
 
 # Add the standard library to the build
 target_link_libraries(leitura_bmp
         pico_stdlib)
-
-target_link_options(leitura_bmp PUBLIC -u _printf_float)
 
 # Add the standard include files to the build
 target_include_directories(leitura_bmp PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
 )
 
+# Add any user requested libraries
+target_link_libraries(leitura_bmp 
+        hardware_pio
+        hardware_uart
+        )
+
 target_compile_definitions(leitura_bmp PRIVATE
         PICO_DEFAULT_UART_TX_PIN=4
         PICO_DEFAULT_UART_RX_PIN=5
         PICO_DEFAULT_UART=1
 )
-
-# Add any user requested libraries
-target_link_libraries(leitura_bmp 
-        hardware_pio
-        )
 
 pico_add_extra_outputs(leitura_bmp)
 
