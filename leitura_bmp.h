@@ -28,8 +28,11 @@ struct bmp_sensor{
    uint8_t channel;
 
    bool active;
-   uint address_fail;
-   uint message_fail;
+   int flag;
+   uint32_t last_error;
+   uint32_t current_error;
+   int error_num;
+   float error_rate;
    
    uint32_t press_raw;
    uint32_t temp_raw;
@@ -78,7 +81,7 @@ void bmp_get_calib(struct State_Machine *sm, struct bmp_sensor *bmp);
 
 /* Refreshes the fail status of a BMP sensor based on an error mask.
    It does not take into account line failures */
-int bmp_status_refresh(struct State_Machine *sm, struct bmp_sensor *bmp, uint error_mask);
+int bmp_status_refresh(struct State_Machine *sm, struct bmp_sensor *bmp, int64_t error_mask);
 
 /* Deactivates BMP sensors whose failure status exceeds a certain threshold */
 int bmp_status_check(struct bmp_sensor *bmp);
@@ -107,10 +110,10 @@ void bmp_calib_file_helper(struct bmp_sensor *bmp);
 void bmp_press_file_helper(struct bmp_sensor *bmp);
 
 /* Sends data via I2C. Assumes data_len is, at least, equal to data */
-int write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t data_len);
+int64_t write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t data_len);
 
 /* Reads data_len from reg via I2C and writes it into rxbuff.*/
-int read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len);
+int64_t read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len);
 
 /* UART Utility */
 #define UART_ID uart1
@@ -120,7 +123,7 @@ int read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff
 #define DATA_BITS 8
 #define STOP_BITS 1
 #define PARITY    UART_PARITY_NONE
-#define BAUD_RATE 115200
+#define BAUD_RATE 500000
 
 
 /* Phalanges addresses */
@@ -196,5 +199,21 @@ int read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff
 #define CHANNEL_CLOSED      -2
 #define ADDR_NOT_FOUND      1
 #define LINE_DOWN           -4
+#define ERROR_THRESHOLD     0.3
+#define GRACE_PERIOD         5000
+#define SENSOR_OK            0
+#define SENSOR_FLAGGED      -1
+#define SENSOR_WARNED       -2
+
+/* Pressure thresholds defined 
+   in the BMPs datasheet */
+#define MAX_BMP_PRESS        125000
+#define MIN_BMP_PRESS        30000
+#define MAX_BMP_TEMP         -40
+#define MIN_BMP_TEMP         85
+
+#define MAX_BMP_VAR_PRESS    5000
+
+
 
 #endif

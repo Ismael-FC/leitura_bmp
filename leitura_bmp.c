@@ -50,6 +50,8 @@ int main(){
     };
 
     sm_init(&sm0, SDA, SCL);
+
+    sleep_ms(15000);
     
     for (size_t i = 0; i < 8; i++){
         bmp_init(&sm0, &bmp_top[i]);
@@ -70,35 +72,40 @@ int main(){
 
 
     gpio_put(UART_ENABLE, true);
-    while ((to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(now)) < 60000){
+    while ((to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(now)) < 300000){
         for (size_t i = 0; i < 8; i++){
             bmp_get_pressure(&sm0, &bmp_top[i]);
         }
         for (size_t i = 0; i < 8; i++){
-            bmp_compensate_pressure(&bmp_top[i]);
-        } 
-        for (size_t i = 0; i < 8; i++){
             bmp_top[i].pca_ptr->open = false;
         }
 
-       
         for (size_t i = 0; i < 8; i++){
-            bmp_press_file_helper(&bmp_top[i]);
+            // bmp_press_file_helper(&bmp_top[i]);
+            char buffer[16];
+
+            if (bmp_top[i].active){
+                snprintf(buffer, sizeof(buffer), "%f,", bmp_top[i].error_rate);
+                uart_puts(UART_ID, buffer);
+            }
         }
         uart_puts(UART_ID, "\n");
-
-        
-
-        // gpio_put(UART_ENABLE, true);
-        // uart_puts(UART_ID, "\n");
-        // gpio_put(UART_ENABLE, false);
-
-
     }
-    gpio_put(UART_ENABLE, false);
+
+    for (size_t i = 0; i < 8; i++){
+        char buffer[16];
+
+        if (bmp_top[i].active){
+            snprintf(buffer, sizeof(buffer), "%f,", bmp_top[i].error_rate);
+            uart_puts(UART_ID, buffer);
+        }
+    }
+    uart_puts(UART_ID, "\n");
+    sleep_ms(10);
     
     uint8_t pca_end[1] = {PCA_CLOSE};
     write_i2c(&sm0, PCA_ADDRESS_TOP, pca_end, sizeof(pca_end));
+    gpio_put(UART_ENABLE, false);
     
     while (true){
         tight_loop_contents();

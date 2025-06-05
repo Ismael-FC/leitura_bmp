@@ -62,11 +62,11 @@ target_link_libraries(leitura_bmp
         hardware_uart
         )
 
-target_compile_definitions(leitura_bmp PRIVATE
-        PICO_DEFAULT_UART_TX_PIN=4
-        PICO_DEFAULT_UART_RX_PIN=5
-        PICO_DEFAULT_UART=1
-)
+# target_compile_definitions(leitura_bmp PRIVATE
+#         PICO_DEFAULT_UART_TX_PIN=4
+#         PICO_DEFAULT_UART_RX_PIN=5
+#         PICO_DEFAULT_UART=1
+# )
 
 pico_add_extra_outputs(leitura_bmp)
 

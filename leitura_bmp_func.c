@@ -12,6 +12,7 @@ void sm_init(struct State_Machine *sm, uint sda, uint scl){
 
     pio_sm_set_consecutive_pindirs(sm->pio, sm->index, sda, 2, true);
 
+    // State machine configuration
     sm_config_set_in_pins(&(sm->config), sda);
     sm_config_set_out_pins(&(sm->config), sda, 1);
     sm_config_set_set_pins(&(sm->config), sda, 1);
@@ -20,10 +21,14 @@ void sm_init(struct State_Machine *sm, uint sda, uint scl){
 
     sm_config_set_in_shift(&(sm->config), false, true, 8);
     sm_config_set_out_shift(&(sm->config), false, true, 8);
-    sm_config_set_clkdiv(&(sm->config), 7.8125f);               //7.8125 = 1 MHz, 19.53125 = 400 kHz
+    
+    //7.8125 = 1 MHz, 19.53125 = 400 kHz
+    sm_config_set_clkdiv(&(sm->config), 7.8125f);               
 
-    // gpio_init(VCC);
-    // gpio_set_dir(VCC, true);
+    // Initialize power
+    gpio_init(VCC);
+    gpio_set_dir(VCC, true);
+    gpio_put(VCC, true);
     
     gpio_pull_up(scl);
     gpio_pull_up(sda);
@@ -38,6 +43,7 @@ void sm_init(struct State_Machine *sm, uint sda, uint scl){
 
     pio_sm_set_pins_with_mask(sm->pio, sm->index, 0, both_pins);
 
+    // Initialize the state machine
     pio_sm_init(sm->pio, sm->index, sm->offset, &(sm->config));
     pio_sm_set_enabled(sm->pio, sm->index, true);
 
@@ -47,9 +53,9 @@ void sm_init(struct State_Machine *sm, uint sda, uint scl){
 
 void sm_soft_reboot(struct State_Machine *sm){
     pio_sm_set_enabled(sm->pio, sm->index, false);
-    // gpio_put(VCC, false);
-    // sleep_ms(250);
-    // gpio_put(VCC, true);
+    gpio_put(VCC, false);
+    sleep_ms(250);
+    gpio_put(VCC, true);
     sm_init(sm, SDA, SCL);
 }
 
@@ -66,7 +72,7 @@ int channel_open(struct State_Machine *sm, struct bmp_sensor *bmp){
 void bmp_init(struct State_Machine *sm, struct bmp_sensor *bmp){
 
     uint8_t init_seq[2] = {BMP_PWR_CTRL, 0x33};
-    uint success = 0;
+    int success = 0;
 
     if (channel_open(sm, bmp) == CHANNEL_CLOSED){
         return;
@@ -77,6 +83,11 @@ void bmp_init(struct State_Machine *sm, struct bmp_sensor *bmp){
     //Activates the sensor if no errors are detected
     if (success == 0){                      
         bmp->active = true;
+        bmp->error_num = 0;
+        bmp->error_rate = 0;
+        bmp->last_error = 0;
+        bmp->current_error = 0;
+        bmp->flag = 0;
     }
 
     return;
@@ -89,7 +100,6 @@ void bmp_get_calib(struct State_Machine *sm, struct bmp_sensor *bmp){
     if (channel_open(sm, bmp) == CHANNEL_CLOSED){
         return;
     }
-
     //The BMP automatically increases the register pointer at every read
     if(bmp_read(sm, bmp, BMP_CALIB_REG_FIRST, nvm_buffer, sizeof(nvm_buffer)) != OK){
         return;
@@ -146,36 +156,55 @@ int bmp_read(struct State_Machine *sm, struct bmp_sensor *bmp, uint8_t reg, uint
 }
 
 
-int bmp_status_refresh(struct State_Machine *sm, struct bmp_sensor *bmp, uint error_mask){
+int bmp_status_refresh(struct State_Machine *sm, struct bmp_sensor *bmp, int64_t error_mask){
 
     if(error_mask == 0){
         return OK;
-    } 
-    // First failure is failure in addressing the device
-    else if (error_mask % 2 == 1){
-        bmp->address_fail += 1;
+    } else if (error_mask > 0){
+        bmp->last_error = bmp->current_error;
+        bmp->current_error = error_mask;
+        bmp->error_num += 1;
         return NOT_OK;
-    } 
-    // All other failiures are message errors
-    else if (error_mask > 1){
-        bmp->message_fail += 1;
-        return NOT_OK;
-    } 
-    // Line failures
-    else {
+    } else {
         sm_soft_reboot(sm);
-        return LINE_DOWN;
+        return NOT_OK;
     }
-    
 }
 
 int bmp_status_check(struct bmp_sensor *bmp){
-    // Deactivates BMP after 3 attempts
-    if (bmp->address_fail > 3 || bmp->message_fail > 3){
-        bmp->active = false;
+    uint32_t time_interval = bmp->current_error - bmp->last_error;
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+
+    if ((bmp->current_error != 0) && (time_interval > 1000)){
+        bmp->error_rate = (float) (bmp->error_num*1000) / (bmp->current_error - bmp->last_error);
+        bmp->error_num = 0; 
+    } 
+    
+    if(bmp->flag != SENSOR_OK && (now - bmp->current_error > GRACE_PERIOD)){
+        bmp->flag += 1;
+        bmp->current_error = now;
+        printf("Sensor has been pardoned.\n");
     }
 
-    //Returns activation status
+    if (bmp->error_rate > ERROR_THRESHOLD){
+        switch (bmp->flag){
+        case SENSOR_OK:
+            bmp->flag = SENSOR_FLAGGED;
+            printf("Sensor has been flagged.\n");
+            break;
+        case SENSOR_FLAGGED:
+            bmp->flag = SENSOR_WARNED;
+            printf("Sensor has been warned.\n");
+            break;
+        case SENSOR_WARNED:
+            bmp->active = false;
+            printf("Sensor has been deactivated.\n");
+            break;
+        default:
+            break;
+        }
+    }
+    
     return bmp->active;
 }
 
@@ -196,10 +225,25 @@ void bmp_get_pressure(struct State_Machine *sm, struct bmp_sensor *bmp){
     //Temperature is used in compensation
     uint8_t buffer[6] = {0};
     
-    bmp_read(sm, bmp, BMP_PRESS_REG_LSB, buffer, 6);
+    if (bmp_read(sm, bmp, BMP_PRESS_REG_LSB, buffer, 6) != OK){
+        //Linear approximation
+        bmp->comp_press[0] = (2 * bmp->comp_press[1]) - bmp->comp_press[2];
+        return;
+    }
 
     bmp->temp_raw = (buffer[5] << 16) | (buffer[4] << 8) | buffer[3];
     bmp->press_raw = (buffer[2] << 16) | (buffer[1] << 8) | buffer[0];
+
+    bmp_compensate_pressure(bmp);
+
+    if ((bmp->comp_press[0] < MIN_BMP_PRESS) 
+        || (bmp->comp_press[0] > MAX_BMP_PRESS)
+        || ((bmp->comp_press[0] - bmp->comp_press[1] > MAX_BMP_VAR_PRESS) && bmp->comp_press[1] != 0)
+        || ((bmp->comp_press[1] - bmp->comp_press[0] > MAX_BMP_VAR_PRESS) && bmp->comp_press[1] != 0)){
+
+        //Linear approximation
+        bmp->comp_press[0] = (2 * bmp->comp_press[1]) - bmp->comp_press[2];
+    }
 
 }
 
@@ -251,23 +295,49 @@ void bmp_calib_file_helper(struct bmp_sensor *bmp){
         return;
     }
 
-    gpio_pull_up(7);
-    printf("Addr - 0x%02x, Channel - %u\n", bmp->address, bmp->channel);
-    printf("%.3e\n", bmp->par_t1);
-    printf("%.3e\n", bmp->par_t2);
-    printf("%.3e\n", bmp->par_t3);
-    printf("%.3e\n", bmp->par_p1);
-    printf("%.3e\n", bmp->par_p2);
-    printf("%.3e\n", bmp->par_p3);
-    printf("%.3e\n", bmp->par_p4);
-    printf("%.3e\n", bmp->par_p5);
-    printf("%.3e\n", bmp->par_p6);
-    printf("%.3e\n", bmp->par_p7);
-    printf("%.3e\n", bmp->par_p8);
-    printf("%.3e\n", bmp->par_p9);
-    printf("%.3e\n", bmp->par_p10);
-    printf("%.3e\n", bmp->par_p11);
-    gpio_pull_down(7);
+    gpio_put(UART_ENABLE, true);
+    sleep_us(250);
+
+    char buffer[32];
+
+    snprintf(buffer, sizeof(buffer), "Addr - 0x%02x, Channel - %u\n", bmp->address, bmp->channel);
+    uart_puts(UART_ID, buffer);
+
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_t1);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_t2);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_t3);
+    uart_puts(UART_ID, buffer);
+
+
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p1);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p2);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p3);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p4);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p5);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p6);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p7);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p8);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p9);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p10);
+    uart_puts(UART_ID, buffer);
+    snprintf(buffer, sizeof(buffer), "%.3e\n", bmp->par_p11);
+    uart_puts(UART_ID, buffer);
+
+    
+
+    sleep_us(250);
+    gpio_put(UART_ENABLE, true);
 }
 
 void bmp_press_file_helper(struct bmp_sensor *bmp){
@@ -278,22 +348,15 @@ void bmp_press_file_helper(struct bmp_sensor *bmp){
             return;
     }
 
-    
     snprintf(buffer, sizeof(buffer), "%.0f,", bmp->comp_press[0]);
-
-    
-    // printf(buffer);
-    
     uart_puts(UART_ID, buffer);
-    
-
     
 }
 
-int write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t data_len){
+int64_t write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t data_len){
 
     //Mask of errors. Each bit is a (N)ACK.
-    int acks = 0;                                        
+    int64_t acks = 0;                                        
     
     //Pulling from the left in the RX FIFO
     pio_sm_put(sm->pio, sm->index, data_len << 24);
@@ -304,22 +367,26 @@ int write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t da
 
     for (size_t i = 0; i < data_len; i++){
         pio_sm_put(sm->pio, sm->index, data[i] << 24);
-        acks += (pio_sm_get_blocking(sm->pio, sm->index) * 2);
+        acks += pio_sm_get_blocking(sm->pio, sm->index);
     }
-    
-    //Stop condition
-    pio_sm_put(sm->pio, sm->index, FILL_TXF); 
 
+    //Stop condition
+    pio_sm_put(sm->pio, sm->index, FILL_TXF);
+
+    if (acks > 0){
+        acks = to_ms_since_boot(get_absolute_time());
+    } 
+    
     if (line_check(SDA, SCL) == LINE_DOWN){
         acks = LINE_DOWN;
     }
-    
-    return acks;                     
+
+    return acks;
 }
 
-int read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len){
+int64_t read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len){
 
-    int acks = write_i2c(sm, addr, &reg, 1);
+    int64_t acks = write_i2c(sm, addr, &reg, 1);
 
     if(acks != 0){
         return acks;
@@ -334,7 +401,7 @@ int read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff
     //Aborts reading if NACK
     if (pio_sm_get_blocking(sm->pio, sm->index) > 0){
         pio_sm_put(sm->pio, sm->index, FILL_TXF);
-        return 1;
+        return to_ms_since_boot(get_absolute_time());
     }
     
     //Read condition
