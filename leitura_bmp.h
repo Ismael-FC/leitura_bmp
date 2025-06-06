@@ -206,6 +206,7 @@ int64_t read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rx
 
 /* To convert most timestamps */
 #define SEC_IN_MS            1000
+#define MIN_TO_SEC           60
 
 /* Pressure/temperature thresholds in the datasheet */
 #define MAX_BMP_PRESS        125000

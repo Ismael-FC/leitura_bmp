@@ -39,7 +39,7 @@ int main(){
 
     sm_init(&sm0, SDA, SCL);
 
-    sleep_ms(1000);
+    sleep_ms(3000);
     
     for (size_t i = 0; i < 8; i++){
         bmp_init(&sm0, &bmp_top[i]);
@@ -59,7 +59,7 @@ int main(){
     absolute_time_t now = get_absolute_time();
 
     gpio_put(UART_ENABLE, true);
-    while ((to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(now)) < 3000){
+    while ((to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(now)) < 10*MIN_TO_SEC*SEC_IN_MS){
         for (size_t i = 0; i < 8; i++){
             bmp_get_pressure(&sm0, &bmp_top[i]);
         }

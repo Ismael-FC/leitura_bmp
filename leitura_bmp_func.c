@@ -95,7 +95,9 @@ void bmp_init(struct State_Machine *sm, struct bmp_sensor *bmp){
     uint8_t init_seq[2] = {BMP_PWR_CTRL, 0x33};
     int success = 0;
 
+    printf("???\n");
     if (channel_open(sm, bmp) == CHANNEL_CLOSED){
+        printf("Here\n");
         return;
     }
     
@@ -103,6 +105,7 @@ void bmp_init(struct State_Machine *sm, struct bmp_sensor *bmp){
     
     //Activate and (re)initialize variables    
     if (success == 0){
+        printf("!!!\n");
         bmp->active = true;
         bmp->press_raw = 0;
         bmp->temp_raw = 0;
@@ -212,22 +215,22 @@ int bmp_status_check(struct bmp_sensor *bmp){
     if(bmp->flag != SENSOR_OK && (now - bmp->current_error > GRACE_PERIOD)){
         bmp->flag += 1;
         bmp->current_error = now;
-        // printf("Sensor has been pardoned.\n");
+        printf("Sensor has been pardoned.\n");
     }
 
     if (bmp->error_rate > ERROR_THRESHOLD){
         switch (bmp->flag){
         case SENSOR_OK:
             bmp->flag = SENSOR_FLAGGED;
-            // printf("Sensor has been flagged.\n");
+            printf("Sensor has been flagged.\n");
             break;
         case SENSOR_FLAGGED:
             bmp->flag = SENSOR_WARNED;
-            // printf("Sensor has been warned.\n");
+            printf("Sensor has been warned.\n");
             break;
         case SENSOR_WARNED:
             bmp->active = false;
-            // printf("Sensor has been deactivated.\n");
+            printf("Sensor has been deactivated.\n");
             break;
         default:
             // panic(), unknown status (?)
@@ -240,7 +243,7 @@ int bmp_status_check(struct bmp_sensor *bmp){
 
 int line_check(uint sda, uint scl){
     // Line should be HIGH after STOP. Only the slave can keep it low
-    if ((gpio_get(sda) || gpio_get(scl)) == 0){
+    if (gpio_is_pulled_down(sda) || gpio_is_pulled_down(scl)){
         return LINE_DOWN;
     }
     return OK;
