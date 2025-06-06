@@ -6,62 +6,64 @@
 #define leitura_bmp
 
 struct State_Machine{
-    uint index;
-    PIO pio;
-    uint offset;
+   
+   /* 0 to 7 on a RP2040, 0 to 12 on a RP2350 */
+   uint index;
 
-    pio_sm_config config;
+   /* pio0 or pio1 */
+   PIO pio;
+
+   /* Where the program starts. Offsets can 
+   be accessed in .../build/filename.pio.h */
+   uint offset;
+
+   /* SM configuration variable */
+   pio_sm_config config;
 };
 
+/* I2C switch name */
 struct pca{
+   /* 3 possible addresses */
    uint8_t address;
+
    uint8_t channel;
    bool open;
 };
 
 
 struct bmp_sensor{
-   uint8_t switch_addr;
+   /* To which I2C switch is linked to */
    struct pca *pca_ptr;
 
+   /* 1 of 2 possible addresses */
    uint8_t address;
-   uint8_t channel;
-
-   bool active;
-   int flag;
-   uint32_t last_error;
-   uint32_t current_error;
-   int error_num;
-   float error_rate;
    
+   /* Doing active measurements */
+   bool active;
+   
+   /* Calibration data (0->2, temperature, 3->13, pressure) */
+   float calib_val[14];
+
+   /* Uncompensated values */
    uint32_t press_raw;
    uint32_t temp_raw;
 
-   /*Calibration data*/
-   double par_t1;
-   double par_t2;
-   double par_t3;
+   /* Compensated values */
+   float comp_temp[3];
+   float comp_press[3];
+
+   /* Rate of errors in an interval bigger than a second */ 
+   int error_num;
+   float error_rate;
+
+   /* Timestamps, in ms */
+   uint32_t last_error;
+   uint32_t current_error;
+
+   /* Increments if error rate is bigger than ERROR_THRESHOLD */
+   int flag;
    
-   double par_p1;
-   double par_p2;
-   double par_p3;
-   double par_p4;
-   double par_p5;
-   double par_p6;
-   double par_p7;
-   double par_p8;
-   double par_p9;
-   double par_p10;
-   double par_p11;
-   /*End of calibration data*/
-
-   double comp_temp;
-   double comp_press[3];
 };
-
-#define SDA 26
-#define SCL 27
-#define VCC 28
 
 /* Initiates a single state machine and stores its configuration */
 void sm_init(struct State_Machine *sm, uint sda, uint scl);
@@ -69,7 +71,7 @@ void sm_init(struct State_Machine *sm, uint sda, uint scl);
 /* Reboots a state machine if it was stuck */
 void sm_soft_reboot(struct State_Machine *sm);
 
-/* Opens a channel if it wasn't openned */
+/* Opens a channel if it was closed */
 int channel_open(struct State_Machine *sm, struct bmp_sensor *bmp);
 
 /* Initializes a single BMP sensor. Failure to initialize will result
@@ -95,10 +97,10 @@ int bmp_write(struct State_Machine *sm, struct bmp_sensor *bmp, uint8_t data[], 
 int bmp_read(struct State_Machine *sm, struct bmp_sensor *bmp, uint8_t reg, uint8_t data[], uint8_t data_len);
 
 /* Turns raw temperature values into readable values in ºC */
-double bmp_compensate_temperature(struct bmp_sensor *bmp);
+float bmp_compensate_temperature(struct bmp_sensor *bmp);
 
 /* Turns raw pressure values into readable values in Pa */
-double bmp_compensate_pressure(struct bmp_sensor *bmp);
+float bmp_compensate_pressure(struct bmp_sensor *bmp);
 
 /* Reads raw pressure and temperature (for compensation) values from a BMP sensor */
 void bmp_get_pressure(struct State_Machine *sm, struct bmp_sensor *bmp);
@@ -115,18 +117,12 @@ int64_t write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_
 /* Reads data_len from reg via I2C and writes it into rxbuff.*/
 int64_t read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len);
 
-/* UART Utility */
-#define UART_ID uart1
-#define UART_TX 4
-#define UART_RX 5
-#define UART_ENABLE 7
-#define DATA_BITS 8
-#define STOP_BITS 1
-#define PARITY    UART_PARITY_NONE
-#define BAUD_RATE 500000
+/* Standard SDA and SCL lines*/
+#define SDA 26
+#define SCL 27
+#define VCC 28
 
-
-/* Phalanges addresses */
+/* I2C switches possible addresses */
 #define PCA_ADDRESS_TOP     0x72 
 #define PCA_ADDRESS_MID     0x71
 #define PCA_ADDRESS_BOTTOM  0x70
@@ -188,32 +184,46 @@ int64_t read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rx
 /* Command's register */
 #define BMP_CMD             0x7e
 
+/* PIO Stop signal */
 #define FILL_TXF            0xffffffff
 
-/* Status */
-#define NOT_OK              1
+/* Communication status */
 #define OK                  0
+#define NOT_OK              1
 
-/* Errors */
+/* Errors causes */
 #define BMP_INACTIVE        -1
 #define CHANNEL_CLOSED      -2
 #define ADDR_NOT_FOUND      1
 #define LINE_DOWN           -4
+
+/* Error status */
 #define ERROR_THRESHOLD     0.3
 #define GRACE_PERIOD         5000
 #define SENSOR_OK            0
 #define SENSOR_FLAGGED      -1
 #define SENSOR_WARNED       -2
 
-/* Pressure thresholds defined 
-   in the BMPs datasheet */
-#define MAX_BMP_PRESS        125000
-#define MIN_BMP_PRESS        30000
-#define MAX_BMP_TEMP         -40
-#define MIN_BMP_TEMP         85
+/* To convert most timestamps */
+#define SEC_IN_MS            1000
 
+/* Pressure/temperature thresholds in the datasheet */
+#define MAX_BMP_PRESS        125000
+#define MIN_BMP_PRESS        30000 
+#define MAX_BMP_TEMP         85
+#define MIN_BMP_TEMP         -4
+
+/* Arbitrary maximum variation permited, per 5 ms */
 #define MAX_BMP_VAR_PRESS    5000
 
-
+/* UART Utility */
+#define UART_ID uart1
+#define UART_TX 4
+#define UART_RX 5
+#define UART_ENABLE 7
+#define DATA_BITS 8
+#define STOP_BITS 1
+#define PARITY    UART_PARITY_NONE
+#define BAUD_RATE 500000
 
 #endif

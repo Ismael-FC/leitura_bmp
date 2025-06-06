@@ -10,20 +10,8 @@
 
 int main(){
     stdio_init_all();
-
-    uart_init(UART_ID, 115200);
-    gpio_set_function(UART_TX, UART_FUNCSEL_NUM(UART_ID, UART_TX));
-    gpio_set_function(UART_RX, UART_FUNCSEL_NUM(UART_ID, UART_RX));
-
-    uart_set_baudrate(UART_ID, BAUD_RATE);
-    uart_set_hw_flow(UART_ID, false, false);
-    uart_set_format(UART_ID, DATA_BITS, STOP_BITS, PARITY);
-    uart_set_fifo_enabled(UART_ID, false);
-
-    gpio_init(UART_ENABLE);
-    gpio_set_dir(UART_ENABLE, true);
-    gpio_pull_up(UART_ENABLE);
-
+    uart_begin();
+    
     struct State_Machine sm0 = {
         0, 
         pio0, 
@@ -39,19 +27,19 @@ int main(){
     };
 
     struct bmp_sensor bmp_top[8] = {
-        {PCA_ADDRESS_TOP, &pca_top[0], BMP_ADDRESS_PRIM, CHANNEL_1, false, 0, 0},
-        {PCA_ADDRESS_TOP, &pca_top[0], BMP_ADDRESS_SEC , CHANNEL_1, false, 0, 0},
-        {PCA_ADDRESS_TOP, &pca_top[1], BMP_ADDRESS_PRIM, CHANNEL_2, false, 0, 0},
-        {PCA_ADDRESS_TOP, &pca_top[1], BMP_ADDRESS_SEC , CHANNEL_2, false, 0, 0},
-        {PCA_ADDRESS_TOP, &pca_top[2], BMP_ADDRESS_PRIM, CHANNEL_3, false, 0, 0},
-        {PCA_ADDRESS_TOP, &pca_top[2], BMP_ADDRESS_SEC , CHANNEL_3, false, 0, 0},
-        {PCA_ADDRESS_TOP, &pca_top[3], BMP_ADDRESS_PRIM, CHANNEL_4, false, 0, 0},
-        {PCA_ADDRESS_TOP, &pca_top[3], BMP_ADDRESS_SEC , CHANNEL_4, false, 0, 0}
+        {&pca_top[0], BMP_ADDRESS_PRIM, false},
+        {&pca_top[0], BMP_ADDRESS_SEC , false},
+        {&pca_top[1], BMP_ADDRESS_PRIM, false},
+        {&pca_top[1], BMP_ADDRESS_SEC , false},
+        {&pca_top[2], BMP_ADDRESS_PRIM, false},
+        {&pca_top[2], BMP_ADDRESS_SEC , false},
+        {&pca_top[3], BMP_ADDRESS_PRIM, false},
+        {&pca_top[3], BMP_ADDRESS_SEC , false}
     };
 
     sm_init(&sm0, SDA, SCL);
 
-    sleep_ms(15000);
+    sleep_ms(1000);
     
     for (size_t i = 0; i < 8; i++){
         bmp_init(&sm0, &bmp_top[i]);
@@ -70,9 +58,8 @@ int main(){
 
     absolute_time_t now = get_absolute_time();
 
-
     gpio_put(UART_ENABLE, true);
-    while ((to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(now)) < 300000){
+    while ((to_ms_since_boot(get_absolute_time()) - to_ms_since_boot(now)) < 3000){
         for (size_t i = 0; i < 8; i++){
             bmp_get_pressure(&sm0, &bmp_top[i]);
         }
@@ -81,13 +68,7 @@ int main(){
         }
 
         for (size_t i = 0; i < 8; i++){
-            // bmp_press_file_helper(&bmp_top[i]);
-            char buffer[16];
-
-            if (bmp_top[i].active){
-                snprintf(buffer, sizeof(buffer), "%f,", bmp_top[i].error_rate);
-                uart_puts(UART_ID, buffer);
-            }
+            bmp_press_file_helper(&bmp_top[i]);
         }
         uart_puts(UART_ID, "\n");
     }
