@@ -19,24 +19,66 @@ struct State_Machine{
 
    /* SM configuration variable */
    pio_sm_config config;
+
+   /* In use? */
+   bool status;
+
+   uint active_sm;
+   uint active_switch;
+
+   uint8_t sda;
+   uint8_t scl;
+
+   /* To which I2C switch is linked to */
+   struct pca *pca_ptr;
 };
+
+#define MAX_BMP    (MAX_BMP_PER_SWITCH * MAX_SWITCH_PER_SM * MAX_SM)
+#define MAX_SWITCH (MAX_SWITCH_PER_SM * MAX_SM)
+
+/* */
+
+#define MAX_BMP_PER_SWITCH 8
+#define MAX_SWITCH_PER_SM  3
+#define MAX_SM             5
+
+typedef struct{
+   uint8_t addr;
+
+   uint32_t *txbuff;
+   uint32_t (*rxbuff)[5];
+
+   uint8_t data_len;
+
+   uint switch_i;
+   uint bmp_j;
+
+   char type;
+
+}message;
 
 /* I2C switch name */
 struct pca{
    /* 3 possible addresses */
    uint8_t address;
 
-   uint8_t channel;
-   bool open;
+   /* Currently open channel */
+   uint8_t open_channel;
+
+   /* In use? */
+   bool status;
+
+   struct bmp_sensor *bmp;
 };
 
 
 struct bmp_sensor{
-   /* To which I2C switch is linked to */
-   struct pca *pca_ptr;
+
+   /* Channel it belongs to */
+   uint32_t channel;
 
    /* 1 of 2 possible addresses */
-   uint8_t address;
+   uint32_t address;
    
    /* Doing active measurements */
    bool active;
@@ -65,6 +107,8 @@ struct bmp_sensor{
    
 };
 
+typedef float (*func_ptr_t)(struct bmp_sensor *bmp);
+
 /* Initiates a single state machine and stores its configuration */
 void sm_init(struct State_Machine *sm, uint sda, uint scl);
 
@@ -72,21 +116,21 @@ void sm_init(struct State_Machine *sm, uint sda, uint scl);
 void sm_soft_reboot(struct State_Machine *sm);
 
 /* Opens a channel if it was closed */
-int channel_open(struct State_Machine *sm, struct bmp_sensor *bmp);
+int channel_open(struct State_Machine *sm, message *msg, uint blacklist);
 
 /* Initializes a single BMP sensor. Failure to initialize will result
    in an inactive sensor. Inactive sensors cannot perform read/write operations */
-void bmp_init(struct State_Machine *sm, struct bmp_sensor *bmp);
+void bmp_init(struct State_Machine *sm);
 
 /* Reads, converts and stores the unique calibration values of a BMP*/
-void bmp_get_calib(struct State_Machine *sm, struct bmp_sensor *bmp);
+void bmp_get_calib(struct State_Machine *sm);
 
 /* Refreshes the fail status of a BMP sensor based on an error mask.
    It does not take into account line failures */
-int bmp_status_refresh(struct State_Machine *sm, struct bmp_sensor *bmp, int64_t error_mask);
+int bmp_status_refresh(struct State_Machine *sm, size_t s, size_t b, uint32_t *errors);
 
 /* Deactivates BMP sensors whose failure status exceeds a certain threshold */
-int bmp_status_check(struct bmp_sensor *bmp);
+int bmp_status_check(struct State_Machine *sm, size_t s, size_t b);
 
 /* Sends data via I2C to a sensor and automatically refreshes its status
    in case of failure */
@@ -94,7 +138,7 @@ int bmp_write(struct State_Machine *sm, struct bmp_sensor *bmp, uint8_t data[], 
 
 /* Receives data via I2C from a BMP and automatically refreshes its status
    in case of failure. Can also reboot the SM if there's a line failure */
-int bmp_read(struct State_Machine *sm, struct bmp_sensor *bmp, uint8_t reg, uint8_t data[], uint8_t data_len);
+int bmp_read(struct State_Machine *sm, message *msg, size_t s, size_t b);
 
 /* Turns raw temperature values into readable values in ºC */
 float bmp_compensate_temperature(struct bmp_sensor *bmp);
@@ -103,23 +147,37 @@ float bmp_compensate_temperature(struct bmp_sensor *bmp);
 float bmp_compensate_pressure(struct bmp_sensor *bmp);
 
 /* Reads raw pressure and temperature (for compensation) values from a BMP sensor */
-void bmp_get_pressure(struct State_Machine *sm, struct bmp_sensor *bmp);
+void bmp_get_pressure(struct State_Machine *sm);
 
 /* Writes calibration values into a CSV file via UART */
-void bmp_calib_file_helper(struct bmp_sensor *bmp);
+void bmp_calib_file_helper(struct State_Machine *sm);
 
 /* Writes pressure and temperature values into a CSV file via UART */
-void bmp_press_file_helper(struct bmp_sensor *bmp);
+void bmp_press_file_helper(struct State_Machine *sm);
 
 /* Sends data via I2C. Assumes data_len is, at least, equal to data */
-int64_t write_i2c(struct State_Machine *sm, uint8_t addr, uint8_t data[], uint8_t data_len);
+uint32_t write_i2c(struct State_Machine *sm, message *msg, uint blacklist);
+
+int send_msgs(void (*put)(PIO, uint, uint32_t), struct State_Machine *sm, uint32_t data, uint blacklist);
 
 /* Reads data_len from reg via I2C and writes it into rxbuff.*/
-int64_t read_i2c(struct State_Machine *sm, uint8_t addr, uint8_t reg, uint8_t rxbuff[], uint8_t data_len);
+uint32_t read_i2c(struct State_Machine *sm, message *msg, uint32_t blacklist);
+
+int receive_msgs(uint32_t (*get)(PIO, uint), struct State_Machine *sm, uint32_t (*buffer)[5], size_t index, uint blacklist);
+
+void message_constructor(message *msg, uint8_t addr, uint32_t *txbuff, uint32_t (*rxbuff)[5], uint data_len);
+
+
+
+
 
 /* Standard SDA and SCL lines*/
 #define SDA 26
 #define SCL 27
+
+#define SDA1 20
+#define SCL1 21
+
 #define VCC 28
 
 /* I2C switches possible addresses */

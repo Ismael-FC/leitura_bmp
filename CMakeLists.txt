@@ -49,7 +49,9 @@ pico_enable_stdio_usb(leitura_bmp 1)
 
 # Add the standard library to the build
 target_link_libraries(leitura_bmp
-        pico_stdlib)
+        pico_stdlib
+        pico_multicore
+        )
 
 # Add the standard include files to the build
 target_include_directories(leitura_bmp PRIVATE
