@@ -28,48 +28,48 @@ set(PICO_BOARD pico CACHE STRING "Board type")
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(leitura_bmp C CXX ASM)
+project(bmp_cycle C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
+add_executable(bmp_cycle ${CMAKE_CURRENT_LIST_DIR}/src/bmp_cycle.c )
 
-add_executable(leitura_bmp leitura_bmp.c )
-
-pico_set_program_name(leitura_bmp "leitura_bmp")
-pico_set_program_version(leitura_bmp "0.1")
+pico_set_program_name(bmp_cycle "bmp_cycle")
+pico_set_program_version(bmp_cycle "0.1")
 
 # Generate PIO header
-pico_generate_pio_header(leitura_bmp ${CMAKE_CURRENT_LIST_DIR}/leitura_bmp.pio)
+pico_generate_pio_header(bmp_cycle ${CMAKE_CURRENT_LIST_DIR}/src/bmp_cycle.pio)
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(leitura_bmp 0)
-pico_enable_stdio_usb(leitura_bmp 1)
+pico_enable_stdio_uart(bmp_cycle 0)
+pico_enable_stdio_usb(bmp_cycle 1)
 
 # Add the standard library to the build
-target_link_libraries(leitura_bmp
+target_link_libraries(bmp_cycle
         pico_stdlib
         pico_multicore
         )
 
 # Add the standard include files to the build
-target_include_directories(leitura_bmp PRIVATE
+target_include_directories(bmp_cycle PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+        include
 )
 
 # Add any user requested libraries
-target_link_libraries(leitura_bmp 
+target_link_libraries(bmp_cycle 
         hardware_pio
         hardware_uart
         )
 
-# target_compile_definitions(leitura_bmp PRIVATE
-#         PICO_DEFAULT_UART_TX_PIN=4
-#         PICO_DEFAULT_UART_RX_PIN=5
-#         PICO_DEFAULT_UART=1
-# )
+# Prints memory usage after compiling
+target_link_options(bmp_cycle PRIVATE -Wl,--print-memory-usage)
 
-pico_add_extra_outputs(leitura_bmp)
+# O2 and O3 compile, but the program does not run correctly
+target_compile_options(bmp_cycle PRIVATE -Wall -O1)
+
+pico_add_extra_outputs(bmp_cycle)
 
 
